@@ -1,36 +1,37 @@
 version: 0.2
-env:
-  variables:
-    AWS_REGION: "us-west-2"
-    ECR_REGISTRY: "604956611121.dkr.ecr.us-west-2.amazonaws.com"
-    REPOSITORY_NAME: "javatechie-registry"
-    DOCKER_CONTAINER_NAME: "course-service"
-
 phases:
   pre_build:
     commands:
-      - echo Logging in to Amazon ECR
+      - mvn clean install
+      - echo Logging in to Amazon ECR...
       - aws --version
-      - export REPOSITORY_URI=$ECR_REGISTRY/$REPOSITORY_NAME
-      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
-      - export IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F':' '{print $2}')
-
+      - REPOSITORY_URI=604956611121.dkr.ecr.us-west-2.amazonaws.com/javatechie-registry
+      - aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $REPOSITORY_URI
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
   build:
     commands:
-      - echo Build started on $(date)
-      - mvn clean install
+      - echo Build started on `date`
+      - echo Building the Docker image...
       - docker build -t $REPOSITORY_URI:latest .
       - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
-
   post_build:
     commands:
-      - echo Build completed on $(date)
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
       - docker push $REPOSITORY_URI:latest
       - docker push $REPOSITORY_URI:$IMAGE_TAG
-      - printf '[{"name":"%s","imageUri":"%s"}]' "$DOCKER_CONTAINER_NAME" "$REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
+      - echo Writing image definitions file...
+      - printf '[{"name":"course-service","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo Writing image definitions file...
+      # add your container name
+      - DOCKER_CONTAINER_NAME=javatechie-registry
+      - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_CONTAINER_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo $DOCKER_CONTAINER_NAME
+      - echo printing imagedefinitions.json
       - cat imagedefinitions.json
 
 artifacts:
   files:
     - imagedefinitions.json
-    - target/*.jar
+    - target/course-service.jar
